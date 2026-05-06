@@ -39,13 +39,17 @@
 動態更新機制 (Multithreading)：利用背景執行緒 (std::thread) 與條件變數 (std::condition_variable)，達成每 30 秒自動重新計算任務分數並重建堆積的功能
 
 ### 遇到的困難
-在設計使用者UI介面時遇到困難，沒學過該如何設計UI介面
+在設計使用者UI介面時遇到困難，沒學過該如何用C++設計UI介面，便想改用HTML進行設計。
+不會把vscode和github連結，不知道該怎麼把vscode的程式碼push到github指定的資料夾。
 
 ### 下一步計畫
-<!-- 接下來要做什麼 -->
+嘗試將UI介面更改得更加美觀和實用。加入可以個人化定義公式。
 
 ### 與課程的關聯
-<!-- 到目前為止，你的實作中哪些部分與課程內容有關？關係是什麼？ -->
+物件封裝 (Encapsulation)： 定義 Task 類別（屬性如優先級、截止日期、權重）在資料結構中稱為「節點 (Node)」或「元素 (Element)」。
+最大堆積 (Max-Heap)： 實作了 siftUp（向上篩選）與 siftDown（向下篩選），確保每次 insert (新增) 或 extractMax (取出最優先任務) 時，最高分的任務永遠在陣列的第 0 格，時間複雜度維持在 O(log n)。
+Binary Search Tree, BST (二元搜尋樹)：程式碼中的 BST 類別，用來作為「依日期查詢」的輔助索引。因為 Heap 只能保證「最大值在哪」，無法快速搜尋「特定日期的任務」。因此這份程式碼多建了一棵 BST，以 YYYYMMDD 字串作為 Key，達成 O(log n) 的日期搜尋與 O(n) 的依日期中序走訪 (inorderAll)。
+動態分數更新 (Decrease/Increase Key)： 當任務的權重改變時，像是快過期了，它在 Heap 中的位置必須重新調整（Sift-up 或 Sift-down）。對資料結構內部的重新平衡 (Rebalancing)。
 
 ---
 
