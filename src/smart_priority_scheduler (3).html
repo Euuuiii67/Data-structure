@@ -1,0 +1,625 @@
+
+<style>
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.mono{font-family:var(--font-mono)}
+.score-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-family:var(--font-mono);font-size:11px;background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.tag-danger{background:#FCEBEB;color:#A32D2D}
+.tag-warn{background:#FAEEDA;color:#854F0B}
+.tag-info{background:#E6F1FB;color:#185FA5}
+.tag-ok{background:#EAF3DE;color:#3B6D11}
+@media(prefers-color-scheme:dark){.tag-danger{background:#501313;color:#F7C1C1}.tag-warn{background:#412402;color:#FAC775}.tag-info{background:#042C53;color:#B5D4F4}.tag-ok{background:#173404;color:#C0DD97}}
+.task-row{border-bottom:0.5px solid var(--color-border-tertiary);padding:8px 0;display:flex;align-items:center;gap:8px;animation:fadeIn 0.3s ease}
+.task-row:last-child{border-bottom:none}
+.level-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scorePulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.recalculating{animation:scorePulse 0.6s ease}
+.rank-1{border-left:3px solid #EF9F27}
+.rank-2{border-left:3px solid #B5D4F4}
+.rank-3{border-left:3px solid var(--color-border-tertiary)}
+.seg-btn{padding:4px 12px;font-size:12px;border-radius:4px;cursor:pointer;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary);transition:all 0.15s}
+.seg-btn.active{background:var(--color-background-primary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
+.param-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.param-label{font-size:12px;color:var(--color-text-secondary);flex:0 0 138px;line-height:1.4}
+.param-val{font-family:var(--font-mono);font-size:12px;color:var(--color-text-warning);flex:0 0 40px;text-align:right;font-weight:500}
+.formula-panel{overflow:hidden;transition:max-height 0.35s ease,opacity 0.3s ease}
+.formula-panel.collapsed{max-height:0!important;opacity:0;pointer-events:none}
+.formula-panel.expanded{max-height:800px;opacity:1}
+.preset-btn{padding:4px 11px;font-size:11px;border-radius:4px;cursor:pointer;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary);transition:all 0.15s}
+.preset-btn:hover{border-color:var(--color-border-primary);color:var(--color-text-primary);background:var(--color-background-primary)}
+.fp-toggle-icon{font-size:11px;color:var(--color-text-tertiary);transition:transform 0.3s ease;display:inline-block}
+</style>
+
+<h2 class="sr-only">智慧型待辦事項優先權排程器 — 使用最大堆積演算法動態排程任務</h2>
+
+<div style="padding:0 0 2rem">
+
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;gap:8px;flex-wrap:wrap">
+  <div>
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);letter-spacing:0.1em;margin-bottom:3px">PRIORITY SCHEDULER · MAX-HEAP · BST</div>
+    <div style="font-size:22px;font-weight:500">智慧任務排程器</div>
+  </div>
+  <div style="text-align:right;margin-top:4px">
+    <div class="mono" style="font-size:11px;color:var(--color-text-tertiary)">重算倒計時 <span id="countdown" style="color:var(--color-text-warning)">30</span>s</div>
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary)" id="last-recalc">—</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1.25rem">
+  <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:3px">HEAP SIZE</div>
+    <div id="s-total" class="mono" style="font-size:22px;font-weight:500">0</div>
+  </div>
+  <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:3px">TOP SCORE</div>
+    <div id="s-max" class="mono" style="font-size:22px;font-weight:500;color:var(--color-text-warning)">—</div>
+  </div>
+  <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:3px">AVG SCORE</div>
+    <div id="s-avg" class="mono" style="font-size:22px;font-weight:500">—</div>
+  </div>
+  <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:3px">OVERDUE</div>
+    <div id="s-overdue" class="mono" style="font-size:22px;font-weight:500;color:var(--color-text-danger)">0</div>
+  </div>
+</div>
+
+<div id="focus-card" style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:1.25rem;margin-bottom:1.25rem;border-left:3px solid #EF9F27">
+  <div class="mono" style="font-size:10px;color:#BA7517;letter-spacing:0.1em;margin-bottom:6px">▶ NOW FOCUS ON</div>
+  <div id="focus-title" style="font-size:20px;font-weight:500;margin-bottom:10px;color:var(--color-text-primary)">尚無任務 — 請新增一個！</div>
+  <div id="focus-meta" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:0">
+    <span style="font-size:12px;color:var(--color-text-tertiary)">新增任務後，最高優先權任務將顯示於此</span>
+  </div>
+  <div id="focus-btns" style="display:none;margin-top:12px;display:flex;gap:8px">
+    <button onclick="completeTop()" style="font-size:13px;padding:6px 16px">完成此任務 ✓</button>
+    <button onclick="snoozeTop()" style="font-size:13px;padding:6px 14px">暫緩</button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
+
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem">
+    <div style="font-size:14px;font-weight:500;margin-bottom:1rem">新增任務</div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:4px">任務名稱</label>
+      <input type="text" id="f-title" placeholder="輸入任務名稱..." style="width:100%;box-sizing:border-box">
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:4px">
+        預計時間: <span id="f-time-v" class="mono" style="color:var(--color-text-primary)">1</span>h
+      </label>
+      <input type="range" id="f-time" min="0.25" max="8" step="0.25" value="1" style="width:100%" oninput="document.getElementById('f-time-v').textContent=this.value;updatePreview()">
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:6px">
+        緊急程度: <span id="f-urg-v" class="mono" style="color:var(--color-text-danger)">3</span>/5
+      </label>
+      <div style="display:flex;gap:5px" id="urg-btns"></div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:6px">
+        重要程度: <span id="f-imp-v" class="mono" style="color:var(--color-text-info)">3</span>/5
+      </label>
+      <div style="display:flex;gap:5px" id="imp-btns"></div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:4px">截止日期（選填）</label>
+      <input type="date" id="f-deadline" style="width:100%;box-sizing:border-box" oninput="updatePreview()">
+    </div>
+
+    <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px;margin-bottom:12px">
+      <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:3px">預覽優先權分數</div>
+      <div id="f-preview" class="mono" style="font-size:24px;font-weight:500;color:var(--color-text-warning)">—</div>
+      <div id="f-formula" class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-top:3px"></div>
+    </div>
+
+    <button onclick="addTask()" style="width:100%;font-size:13px;padding:8px">加入堆積 (O log n) ↗</button>
+  </div>
+
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div style="font-size:14px;font-weight:500">任務佇列</div>
+      <div class="mono" style="font-size:10px;color:var(--color-text-tertiary)">MAX-HEAP</div>
+    </div>
+    <div id="task-list" style="max-height:360px;overflow-y:auto">
+      <div style="font-size:13px;color:var(--color-text-tertiary);text-align:center;padding:3rem 0">堆積為空</div>
+    </div>
+  </div>
+</div>
+
+<div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <div style="font-size:14px;font-weight:500">BST 日期搜尋</div>
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary)">Binary Search Tree · O(log n)</div>
+  </div>
+  <div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:12px">以截止日期為鍵值，快速查詢特定日期的任務</div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <input type="date" id="bst-date" style="flex:1">
+    <button onclick="bstSearch()" style="padding:6px 14px;font-size:12px">搜尋 ↗</button>
+    <button onclick="showAllByDate()" style="padding:6px 14px;font-size:12px">全部(依日期)</button>
+    <button onclick="clearBst()" style="padding:6px 12px;font-size:12px">清除</button>
+  </div>
+  <div id="bst-results" style="margin-top:12px"></div>
+</div>
+
+<!-- ===== Formula Settings Panel ===== -->
+<div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:1.25rem;margin-bottom:1.25rem">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none" onclick="toggleFormulaPanel()">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:14px;font-weight:500">⚙ 優先權公式設定</span>
+      <span id="fp-changed-badge" style="display:none;font-size:10px;font-family:var(--font-mono);background:#E6F1FB;color:#185FA5;padding:2px 6px;border-radius:3px">已修改</span>
+    </div>
+    <span id="fp-toggle" class="fp-toggle-icon">▼</span>
+  </div>
+
+  <div id="formula-panel" class="formula-panel expanded" style="margin-top:1rem">
+
+    <!-- Live formula display -->
+    <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 14px;margin-bottom:14px">
+      <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);letter-spacing:0.08em;margin-bottom:6px">目前公式預覽</div>
+      <div id="fp-display" class="mono" style="font-size:12px;color:var(--color-text-secondary);line-height:2"></div>
+    </div>
+
+    <!-- Presets row -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:7px;letter-spacing:0.05em">快速預設</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="preset-btn" onclick="applyPreset('default')">⚖ 預設均衡</button>
+        <button class="preset-btn" onclick="applyPreset('urgency')">🔥 強調緊急</button>
+        <button class="preset-btn" onclick="applyPreset('importance')">⭐ 強調重要</button>
+        <button class="preset-btn" onclick="applyPreset('deadline')">⏰ 強調截止</button>
+        <button class="preset-btn" onclick="applyPreset('relaxed')">🧘 寬鬆模式</button>
+      </div>
+    </div>
+
+    <!-- Parameters grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:16px">
+
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--color-text-tertiary);letter-spacing:0.08em;margin-bottom:10px">基礎分數 BASE</div>
+
+        <div class="param-row">
+          <span class="param-label">緊急程度權重 W<sub>U</sub></span>
+          <input type="range" min="0" max="5" step="0.5" id="fp-wU" value="2" style="flex:1" oninput="fpUpdate()">
+          <span class="param-val" id="fp-wU-v">2</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">重要程度權重 W<sub>I</sub></span>
+          <input type="range" min="0" max="5" step="0.5" id="fp-wI" value="3" style="flex:1" oninput="fpUpdate()">
+          <span class="param-val" id="fp-wI-v">3</span>
+        </div>
+        <div style="margin-top:6px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:8px 10px">
+          <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">目前比例</div>
+          <div id="fp-ratio" class="mono" style="font-size:11px;color:var(--color-text-secondary)">U:I = 2:3</div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--color-text-tertiary);letter-spacing:0.08em;margin-bottom:10px">截止日期因子 DEADLINE</div>
+
+        <div class="param-row">
+          <span class="param-label">逾期懲罰倍數</span>
+          <input type="range" min="1" max="50" step="1" id="fp-overdue" value="15" style="flex:1" oninput="fpUpdate()">
+          <span class="param-val" id="fp-overdue-v">15</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">截止基礎值 b</span>
+          <input type="range" min="0" max="5" step="0.1" id="fp-dlBase" value="1" style="flex:1" oninput="fpUpdate()">
+          <span class="param-val" id="fp-dlBase-v">1.0</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">截止加成幅度 A</span>
+          <input type="range" min="0" max="20" step="0.5" id="fp-dlAmp" value="6" style="flex:1" oninput="fpUpdate()">
+          <span class="param-val" id="fp-dlAmp-v">6</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">衰減速率 k</span>
+          <input type="range" min="0.01" max="1" step="0.01" id="fp-dlDecay" value="0.2" style="flex:1" oninput="fpUpdate()">
+          <span class="param-val" id="fp-dlDecay-v">0.20</span>
+        </div>
+        <div style="margin-top:2px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:8px 10px">
+          <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">d(days) = b + A × e⁻ᵏᵈ</div>
+          <div id="fp-decay-preview" class="mono" style="font-size:10px;color:var(--color-text-secondary)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="applyFormula(this)" style="font-size:13px;padding:7px 16px">套用並重算全部任務 ↺</button>
+      <button onclick="resetFormula()" style="font-size:13px;padding:7px 14px;background:var(--color-background-secondary)">重置預設值</button>
+      <span id="fp-apply-hint" class="mono" style="font-size:11px;color:var(--color-text-tertiary);margin-left:4px"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Info Grid (dynamic) ===== -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+  <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px">優先權公式</div>
+    <div id="info-formula" class="mono" style="font-size:11px;color:var(--color-text-secondary);line-height:1.9"></div>
+  </div>
+  <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px">時間衰減效果</div>
+    <div id="info-decay" class="mono" style="font-size:11px;color:var(--color-text-secondary);line-height:1.9"></div>
+  </div>
+  <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
+    <div class="mono" style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px">複雜度分析</div>
+    <div class="mono" style="font-size:11px;color:var(--color-text-secondary);line-height:1.9">
+      insert: O(log n)<br>
+      peek: O(1)<br>
+      extractMax: O(log n)<br>
+      <span style="color:var(--color-text-success)">BST search: O(log n)</span>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+let urgVal=3, impVal=3;
+let taskIdCounter=1;
+let countdownVal=30;
+let heapArr=[];
+
+// ===== Configurable formula parameters =====
+let formulaConfig = {
+  wU: 2,           // Urgency weight
+  wI: 3,           // Importance weight
+  overdueMulti: 15, // Overdue penalty multiplier
+  dlBase: 1,        // Deadline factor base offset (b)
+  dlAmplitude: 6,   // Deadline factor amplitude (A)
+  dlDecay: 0.2,     // Deadline decay rate (k)
+};
+const DEFAULT_FORMULA = {...formulaConfig};
+
+class BSTNode{constructor(dateKey,tasks){this.key=dateKey;this.tasks=[...tasks];this.left=null;this.right=null}}
+class BST{
+  constructor(){this.root=null}
+  insert(task){if(!task.deadline)return;const k=task.deadline;this.root=this._ins(this.root,k,task)}
+  _ins(node,k,task){if(!node)return new BSTNode(k,[task]);if(k<node.key)node.left=this._ins(node.left,k,task);else if(k>node.key)node.right=this._ins(node.right,k,task);else node.tasks.push(task);return node}
+  search(k){return this._srch(this.root,k)}
+  _srch(node,k){if(!node)return[];if(k===node.key)return node.tasks;return k<node.key?this._srch(node.left,k):this._srch(node.right,k)}
+  inorder(){const r=[];this._io(this.root,r);return r}
+  _io(node,r){if(!node)return;this._io(node.left,r);r.push(...node.tasks);this._io(node.right,r)}
+  rebuild(tasks){this.root=null;tasks.filter(t=>t.deadline).forEach(t=>this.insert(t))}
+}
+
+let bst=new BST();
+
+function calcScore(u,i,t,deadline){
+  const {wU,wI,overdueMulti,dlBase,dlAmplitude,dlDecay}=formulaConfig;
+  const base=(u*wU+i*wI)/Math.log2(t+2);
+  if(!deadline)return base;
+  const days=(new Date(deadline)-Date.now())/(1000*60*60*24);
+  if(days<=0)return base*overdueMulti;
+  const d=dlBase+dlAmplitude*Math.exp(-dlDecay*days);
+  return base*d;
+}
+
+function scoreColor(s){if(s>=15)return'var(--color-text-danger)';if(s>=8)return'var(--color-text-warning)';if(s>=4)return'var(--color-text-info)';return'var(--color-text-secondary)'}
+
+function heapSwap(a,b){const t=heapArr[a];heapArr[a]=heapArr[b];heapArr[b]=t}
+function heapUp(i){while(i>0){const p=Math.floor((i-1)/2);if(heapArr[p].score>=heapArr[i].score)break;heapSwap(p,i);i=p}}
+function heapDown(i){const n=heapArr.length;while(true){let m=i,l=2*i+1,r=2*i+2;if(l<n&&heapArr[l].score>heapArr[m].score)m=l;if(r<n&&heapArr[r].score>heapArr[m].score)m=r;if(m===i)break;heapSwap(i,m);i=m}}
+function heapInsert(task){heapArr.push(task);heapUp(heapArr.length-1)}
+function heapExtractMax(){if(!heapArr.length)return null;const top=heapArr[0];const last=heapArr.pop();if(heapArr.length){heapArr[0]=last;heapDown(0)}return top}
+function heapPeek(){return heapArr.length?heapArr[0]:null}
+function heapRebuild(){const items=[...heapArr];heapArr=[];items.forEach(t=>heapInsert(t))}
+
+function recalcAll(){
+  heapArr.forEach(t=>{t.score=parseFloat(calcScore(t.urgency,t.importance,t.estimatedTime,t.deadline).toFixed(2))});
+  heapRebuild();
+  bst.rebuild(heapArr);
+  renderAll();
+  const now=new Date();document.getElementById('last-recalc').textContent='上次重算 '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+}
+
+function buildRatingBtns(containerId,varName,displayId,colorVar){
+  const c=document.getElementById(containerId);
+  for(let v=1;v<=5;v++){
+    const b=document.createElement('button');
+    b.style.cssText='width:32px;height:32px;padding:0;font-family:var(--font-mono);font-size:12px;border-radius:4px';
+    b.textContent=v;
+    b.dataset.val=v;
+    b.onclick=()=>{
+      if(varName==='urg')urgVal=v;else impVal=v;
+      document.getElementById(displayId).textContent=v;
+      c.querySelectorAll('button').forEach(x=>{x.style.background=x.dataset.val<=v?colorVar:'var(--color-background-secondary)'});
+      updatePreview();
+    };
+    if(v<=3)b.style.background=colorVar;
+    c.appendChild(b);
+  }
+}
+
+function updatePreview(){
+  const t=parseFloat(document.getElementById('f-time').value)||1;
+  const d=document.getElementById('f-deadline').value||null;
+  const s=calcScore(urgVal,impVal,t,d);
+  const {wU,wI}=formulaConfig;
+  const base=(urgVal*wU+impVal*wI)/Math.log2(t+2);
+  const factor=d?(s/base).toFixed(2):1;
+  document.getElementById('f-preview').textContent=s.toFixed(2);
+  document.getElementById('f-formula').textContent=
+    '('+urgVal+'×'+wU+' + '+impVal+'×'+wI+') ÷ log₂('+(t+2).toFixed(2)+') × '+factor+' = '+s.toFixed(2);
+}
+
+function addTask(){
+  const title=document.getElementById('f-title').value.trim();
+  if(!title){document.getElementById('f-title').style.border='1px solid var(--color-border-danger)';setTimeout(()=>document.getElementById('f-title').style.border='',1200);return}
+  const t=parseFloat(document.getElementById('f-time').value)||1;
+  const d=document.getElementById('f-deadline').value||null;
+  const score=parseFloat(calcScore(urgVal,impVal,t,d).toFixed(2));
+  const task={id:taskIdCounter++,title,urgency:urgVal,importance:impVal,estimatedTime:t,deadline:d,score,createdAt:Date.now()};
+  heapInsert(task);
+  if(d)bst.insert(task);
+  document.getElementById('f-title').value='';
+  document.getElementById('f-deadline').value='';
+  renderAll();
+}
+
+function completeTop(){
+  const top=heapExtractMax();
+  if(top){
+    bst.rebuild(heapArr);
+    renderAll();
+  }
+}
+
+function snoozeTop(){
+  const top=heapArr[0];
+  if(!top)return;
+  top.score=top.score*0.3;
+  heapDown(0);
+  renderAll();
+}
+
+function daysLabel(deadline){
+  if(!deadline)return null;
+  const d=(new Date(deadline)-Date.now())/(1000*60*60*24);
+  if(d<0)return{text:'逾期 '+Math.abs(Math.ceil(d))+'天',cls:'tag-danger'};
+  if(d<1)return{text:'今天到期',cls:'tag-danger'};
+  if(d<3)return{text:Math.ceil(d)+'天後到期',cls:'tag-warn'};
+  if(d<7)return{text:Math.ceil(d)+'天後',cls:'tag-info'};
+  return{text:deadline,cls:'tag-ok'};
+}
+
+function renderFocusCard(){
+  const top=heapPeek();
+  const title=document.getElementById('focus-title');
+  const meta=document.getElementById('focus-meta');
+  const btns=document.getElementById('focus-btns');
+  if(!top){
+    title.textContent='尚無任務 — 請新增一個！';
+    meta.innerHTML='<span style="font-size:12px;color:var(--color-text-tertiary)">新增任務後，最高優先權任務將顯示於此</span>';
+    btns.style.display='none';
+    return;
+  }
+  title.textContent=top.title;
+  const dl=daysLabel(top.deadline);
+  let metaHTML=`<span class="mono" style="font-size:12px;color:var(--color-text-warning);font-weight:500">分數 ${top.score}</span>`;
+  metaHTML+=`<span class="score-badge">U:${top.urgency} I:${top.importance} T:${top.estimatedTime}h</span>`;
+  if(dl)metaHTML+=`<span class="score-badge ${dl.cls}">${dl.text}</span>`;
+  meta.innerHTML=metaHTML;
+  btns.style.display='flex';
+}
+
+function renderTaskList(){
+  const el=document.getElementById('task-list');
+  if(!heapArr.length){el.innerHTML='<div style="font-size:13px;color:var(--color-text-tertiary);text-align:center;padding:3rem 0">堆積為空</div>';return}
+  const sorted=[...heapArr].sort((a,b)=>b.score-a.score);
+  el.innerHTML=sorted.map((t,idx)=>{
+    const rankCls=idx===0?'rank-1':idx===1?'rank-2':'rank-3';
+    const dl=daysLabel(t.deadline);
+    const pct=Math.min(100,Math.round((t.score/sorted[0].score)*100));
+    const pipColor=t.urgency>=4?'#E24B4A':t.urgency>=3?'#EF9F27':'#378ADD';
+    return`<div class="task-row ${rankCls}" style="padding-left:6px">
+      <div class="level-pip" style="background:${pipColor}"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${idx===0?'▶ ':''}${t.title}</div>
+        <div style="height:3px;background:var(--color-border-tertiary);border-radius:2px;margin-top:4px"><div style="height:3px;border-radius:2px;background:${scoreColor(t.score)};width:${pct}%;transition:width 0.6s ease"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="mono" style="font-size:13px;font-weight:500;color:${scoreColor(t.score)}">${t.score}</div>
+        ${dl?`<div class="mono" style="font-size:10px;padding:1px 4px;border-radius:3px" class="${dl.cls}">${dl.text}</div>`:''}
+      </div>
+      <button onclick="removeTask(${t.id})" style="padding:2px 8px;font-size:11px;flex-shrink:0">✕</button>
+    </div>`
+  }).join('');
+}
+
+function removeTask(id){
+  const idx=heapArr.findIndex(t=>t.id===id);
+  if(idx<0)return;
+  heapArr.splice(idx,1);
+  heapArr=[];
+  const tmp=[...heapArr];
+  heapArr=[];
+  const all=document.getElementById('task-list').querySelectorAll('.task-row');
+  const tasks=[];
+  for(let i=0;i<heapArr.length;i++)if(heapArr[i].id!==id)tasks.push(heapArr[i]);
+  heapArr=[];
+  renderAll();
+}
+
+window.removeTask=function(id){
+  const idx=heapArr.findIndex(t=>t.id===id);
+  if(idx<0)return;
+  heapArr.splice(idx,1);
+  heapRebuild();
+  bst.rebuild(heapArr);
+  renderAll();
+};
+
+function updateStats(){
+  const n=heapArr.length;
+  document.getElementById('s-total').textContent=n;
+  if(!n){document.getElementById('s-max').textContent='—';document.getElementById('s-avg').textContent='—';document.getElementById('s-overdue').textContent=0;return}
+  const scores=heapArr.map(t=>t.score);
+  document.getElementById('s-max').textContent=Math.max(...scores).toFixed(1);
+  document.getElementById('s-avg').textContent=(scores.reduce((a,b)=>a+b,0)/n).toFixed(1);
+  const overdue=heapArr.filter(t=>t.deadline&&new Date(t.deadline)<new Date()).length;
+  document.getElementById('s-overdue').textContent=overdue;
+}
+
+function renderAll(){renderFocusCard();renderTaskList();updateStats()}
+
+function bstSearch(){
+  const d=document.getElementById('bst-date').value;
+  const r=document.getElementById('bst-results');
+  if(!d){r.innerHTML='<div style="font-size:12px;color:var(--color-text-tertiary)">請選擇日期</div>';return}
+  const res=bst.search(d);
+  if(!res.length){r.innerHTML=`<div class="mono" style="font-size:12px;color:var(--color-text-tertiary)">BST: 未找到 ${d} 的任務</div>`;return}
+  r.innerHTML=`<div class="mono" style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px">BST 搜尋結果: ${d} (${res.length}筆)</div>`+
+  res.map(t=>`<div class="task-row"><span style="font-size:13px;flex:1">${t.title}</span><span class="mono" style="font-size:12px;color:${scoreColor(t.score)}">${t.score}</span></div>`).join('');
+}
+
+function showAllByDate(){
+  const r=document.getElementById('bst-results');
+  const all=bst.inorder();
+  if(!all.length){r.innerHTML='<div class="mono" style="font-size:12px;color:var(--color-text-tertiary)">無含截止日期的任務</div>';return}
+  r.innerHTML='<div class="mono" style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px">BST 中序走訪 (依截止日期排序)</div>'+
+  all.map(t=>`<div class="task-row"><div class="level-pip" style="background:${scoreColor(t.score)}"></div><span style="font-size:13px;flex:1">${t.title}</span><span class="mono" style="font-size:11px;color:var(--color-text-tertiary)">${t.deadline}</span><span class="mono" style="font-size:12px;color:${scoreColor(t.score)}">${t.score}</span></div>`).join('');
+}
+
+function clearBst(){document.getElementById('bst-results').innerHTML=''}
+
+// ===== Formula Panel Functions =====
+function updateFormulaDisplay(){
+  const {wU,wI,overdueMulti,dlBase,dlAmplitude,dlDecay}=formulaConfig;
+  const dlFn=days=>(dlBase+dlAmplitude*Math.exp(-dlDecay*days)).toFixed(2);
+  const isModified=Object.keys(DEFAULT_FORMULA).some(k=>formulaConfig[k]!==DEFAULT_FORMULA[k]);
+  const badge=document.getElementById('fp-changed-badge');
+  if(badge)badge.style.display=isModified?'inline':'none';
+
+  const fpDisp=document.getElementById('fp-display');
+  if(fpDisp){
+    const exampleDays=[0.1,1,3,7].map(d=>d===0.1?`逾期:×${overdueMulti}`:`${d}天:×${dlFn(d)}`).join(' │ ');
+    fpDisp.innerHTML=
+      `base&nbsp;= (U×<b style="color:var(--color-text-danger)">${wU}</b> + I×<b style="color:var(--color-text-info)">${wI}</b>) ÷ log₂(T+2)<br>`+
+      `d(n)&nbsp;= <b>${dlBase}</b> + <b>${dlAmplitude}</b>×e<sup>-${dlDecay}×n天</sup>&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary);font-size:10px">(逾期: ×${overdueMulti})</span><br>`+
+      `<span style="color:var(--color-text-warning)">score = base × d</span>`;
+  }
+  const decayPrev=document.getElementById('fp-decay-preview');
+  if(decayPrev)decayPrev.innerHTML=[1,3,7].map(d=>`${d}天後: ×${dlFn(d)}`).join(' &nbsp;│&nbsp; ');
+
+  const infoF=document.getElementById('info-formula');
+  if(infoF)infoF.innerHTML=
+    `base=(U×${wU}+I×${wI})<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;÷log₂(T+2)<br>`+
+    `d=${dlBase}+${dlAmplitude}×e⁻ᵏ×ᵈ<br><span style="color:var(--color-text-warning)">score=base×d</span>`;
+
+  const infoD=document.getElementById('info-decay');
+  if(infoD)infoD.innerHTML=
+    `逾期: ×${overdueMulti} 倍<br>`+
+    `1天後: ×${dlFn(1)} 倍<br>`+
+    `3天後: ×${dlFn(3)} 倍<br>`+
+    `<span style="color:var(--color-text-info)">7天後: ×${dlFn(7)} 倍</span>`;
+
+  const ratio=document.getElementById('fp-ratio');
+  if(ratio)ratio.textContent=`U:I = ${wU}:${wI}${wU===0&&wI===0?' (⚠ 均為0)':''}`;
+}
+
+function fpUpdate(){
+  formulaConfig.wU=parseFloat(document.getElementById('fp-wU').value);
+  formulaConfig.wI=parseFloat(document.getElementById('fp-wI').value);
+  formulaConfig.overdueMulti=parseFloat(document.getElementById('fp-overdue').value);
+  formulaConfig.dlBase=parseFloat(document.getElementById('fp-dlBase').value);
+  formulaConfig.dlAmplitude=parseFloat(document.getElementById('fp-dlAmp').value);
+  formulaConfig.dlDecay=parseFloat(document.getElementById('fp-dlDecay').value);
+  document.getElementById('fp-wU-v').textContent=formulaConfig.wU;
+  document.getElementById('fp-wI-v').textContent=formulaConfig.wI;
+  document.getElementById('fp-overdue-v').textContent=formulaConfig.overdueMulti;
+  document.getElementById('fp-dlBase-v').textContent=formulaConfig.dlBase.toFixed(1);
+  document.getElementById('fp-dlAmp-v').textContent=formulaConfig.dlAmplitude;
+  document.getElementById('fp-dlDecay-v').textContent=formulaConfig.dlDecay.toFixed(2);
+  updateFormulaDisplay();
+  updatePreview();
+}
+
+function applyFormula(btn){
+  recalcAll();
+  if(btn){const orig=btn.textContent;btn.textContent='✓ 已重算！';setTimeout(()=>btn.textContent=orig,1800)}
+  const hint=document.getElementById('fp-apply-hint');
+  if(hint){hint.textContent='已更新 '+heapArr.length+' 筆任務';setTimeout(()=>hint.textContent='',2500)}
+}
+
+function resetFormula(){
+  Object.assign(formulaConfig,DEFAULT_FORMULA);
+  document.getElementById('fp-wU').value=DEFAULT_FORMULA.wU;
+  document.getElementById('fp-wI').value=DEFAULT_FORMULA.wI;
+  document.getElementById('fp-overdue').value=DEFAULT_FORMULA.overdueMulti;
+  document.getElementById('fp-dlBase').value=DEFAULT_FORMULA.dlBase;
+  document.getElementById('fp-dlAmp').value=DEFAULT_FORMULA.dlAmplitude;
+  document.getElementById('fp-dlDecay').value=DEFAULT_FORMULA.dlDecay;
+  fpUpdate();
+  recalcAll();
+}
+
+const PRESETS={
+  default:{wU:2,wI:3,overdueMulti:15,dlBase:1,dlAmplitude:6,dlDecay:0.2},
+  urgency:{wU:5,wI:1,overdueMulti:25,dlBase:1,dlAmplitude:12,dlDecay:0.4},
+  importance:{wU:1,wI:5,overdueMulti:8,dlBase:1,dlAmplitude:4,dlDecay:0.12},
+  deadline:{wU:2,wI:3,overdueMulti:40,dlBase:1,dlAmplitude:15,dlDecay:0.55},
+  relaxed:{wU:1.5,wI:2,overdueMulti:5,dlBase:1,dlAmplitude:2,dlDecay:0.08},
+};
+function applyPreset(name){
+  const p=PRESETS[name];if(!p)return;
+  Object.assign(formulaConfig,p);
+  document.getElementById('fp-wU').value=p.wU;
+  document.getElementById('fp-wI').value=p.wI;
+  document.getElementById('fp-overdue').value=p.overdueMulti;
+  document.getElementById('fp-dlBase').value=p.dlBase;
+  document.getElementById('fp-dlAmp').value=p.dlAmplitude;
+  document.getElementById('fp-dlDecay').value=p.dlDecay;
+  fpUpdate();
+  recalcAll();
+}
+
+let fpExpanded=true;
+function toggleFormulaPanel(){
+  fpExpanded=!fpExpanded;
+  const panel=document.getElementById('formula-panel');
+  const icon=document.getElementById('fp-toggle');
+  panel.classList.toggle('expanded',fpExpanded);
+  panel.classList.toggle('collapsed',!fpExpanded);
+  if(icon)icon.style.transform=fpExpanded?'':'rotate(-90deg)';
+}
+
+buildRatingBtns('urg-btns','urg','f-urg-v','#E24B4A');
+buildRatingBtns('imp-btns','imp','f-imp-v','#378ADD');
+updateFormulaDisplay();
+updatePreview();
+
+const sampleTasks=[
+  {title:'準備期末報告簡報',urgency:5,importance:5,estimatedTime:3,deadline:new Date(Date.now()+1.5*86400000).toISOString().split('T')[0]},
+  {title:'修復登入頁面 bug',urgency:4,importance:4,estimatedTime:1,deadline:new Date(Date.now()+2*86400000).toISOString().split('T')[0]},
+  {title:'回覆導師 email',urgency:3,importance:3,estimatedTime:0.25,deadline:null},
+  {title:'閱讀演算法教材第五章',urgency:2,importance:4,estimatedTime:2,deadline:new Date(Date.now()+7*86400000).toISOString().split('T')[0]},
+];
+sampleTasks.forEach(st=>{
+  const score=parseFloat(calcScore(st.urgency,st.importance,st.estimatedTime,st.deadline).toFixed(2));
+  const task={id:taskIdCounter++,title:st.title,urgency:st.urgency,importance:st.importance,estimatedTime:st.estimatedTime,deadline:st.deadline,score,createdAt:Date.now()};
+  heapInsert(task);
+  if(st.deadline)bst.insert(task);
+});
+renderAll();
+
+window.addTask=addTask;window.completeTop=completeTop;window.snoozeTop=snoozeTop;
+window.bstSearch=bstSearch;window.showAllByDate=showAllByDate;window.clearBst=clearBst;
+window.updatePreview=updatePreview;
+window.fpUpdate=fpUpdate;window.applyFormula=applyFormula;window.resetFormula=resetFormula;
+window.applyPreset=applyPreset;window.toggleFormulaPanel=toggleFormulaPanel;
+
+setInterval(()=>{
+  countdownVal--;
+  if(countdownVal<=0){countdownVal=30;recalcAll();document.getElementById('task-list').querySelectorAll('.mono').forEach(el=>el.classList.add('recalculating'));setTimeout(()=>document.getElementById('task-list').querySelectorAll('.mono').forEach(el=>el.classList.remove('recalculating')),700)}
+  document.getElementById('countdown').textContent=countdownVal;
+},1000);
+</script>
